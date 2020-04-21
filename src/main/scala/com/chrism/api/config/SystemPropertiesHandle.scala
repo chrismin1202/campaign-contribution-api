@@ -30,6 +30,32 @@ trait SystemPropertiesHandle {
     else Right(ifNotSet)
   }
 
+  protected final def withSystemPropertiesIfSetOrDefault[A](
+    key: String,
+    moreKeys: String*
+  )(
+    ifSet: Map[String, String] => A
+  )(
+    default: => A
+  ): A = {
+    val props = sys.props
+    val values = (key +: moreKeys).map(k => k -> props.get(k))
+    if (values.forall(_._2.isDefined)) ifSet(values.map(kv => kv._1 -> kv._2.get).toMap)
+    else default
+  }
+
+  protected final def withSystemPropertiesIfSetOrNone[A](
+    key: String,
+    moreKeys: String*
+  )(
+    ifSet: Map[String, String] => A
+  ): Option[A] = {
+    val props = sys.props
+    val values = (key +: moreKeys).map(k => k -> props.get(k))
+    if (values.forall(_._2.isDefined)) Some(ifSet(values.map(kv => kv._1 -> kv._2.get).toMap))
+    else None
+  }
+
   protected final def withSystemProperties[A](key: String, moreKeys: String*)(func: Map[String, String] => A): A = {
     val props = sys.props
     func((key +: moreKeys).map(k => k -> props(k)).toMap)

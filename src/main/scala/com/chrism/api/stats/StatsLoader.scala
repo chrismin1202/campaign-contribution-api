@@ -15,13 +15,13 @@
 package com.chrism.api.stats
 
 import cats.effect.IO
-import com.chrism.api.{CampaignContributionJson4sFormatsLike, NoResultsException}
 import com.chrism.api.google.CivicInformationClient
 import com.chrism.api.log.Logging
 import com.chrism.api.maplight.MapLightClient
 import com.chrism.api.maplight.model.contributions.{ContributionSearchResponse, RequestParams}
 import com.chrism.api.maplight.model.search.name.{CandidateName, CandidateSearchResponse}
 import com.chrism.api.standard.{SubdivisionKind, UsSubdivision}
+import com.chrism.api.{CampaignContributionJson4sFormatsLike, NoResultsException}
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession}
@@ -29,22 +29,36 @@ import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession}
 import scala.collection.mutable
 import scala.util.matching.Regex
 
-// TODO: ScalaDoc
-
 object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
 
   private val CandidateLabelRegex: Regex = "\\(([A-Z]), ([A-Za-z]+)(-([0-9]+))?\\)".r
   private val CandidateDonationPath: String = "candidate_donation"
   private val PartyDonationPath: String = "party_donation"
 
-  def preload(googleApiKey: String, basePath: String)(implicit spark: SparkSession): IO[Unit] = {
+  /** Preloads the aggregate data to the given path.
+    *
+    * @param googleApiKey the API key for calling Google Civic Information API
+    * @param basePath the base path
+    * @param states optional list of states to include in the aggregate data
+    */
+  def preload(
+    googleApiKey: String,
+    basePath: String,
+    states: Option[Seq[UsSubdivision]] = None
+  )(
+    implicit
+    spark: SparkSession
+  ): IO[Unit] = {
     import spark.implicits._
 
-    val subdivisions = UsSubdivision.Values
+    val subdivisions = states
+      .getOrElse(UsSubdivision.Values.toSeq)
       .filter(_.kind == SubdivisionKind.State)
-      .filter(_ == UsSubdivision.MA)
-      .toSeq
+      .distinct
       .map(EncodableUsSubdivision(_))
+    logger.info(s"""Preloading the environment with the following states:
+                   |${subdivisions.map(s => s"${s.name} (${s.code})").mkString(System.lineSeparator())}""".stripMargin)
+
     val client = spark.sparkContext.broadcast(CivicInformationClient(googleApiKey))
     writeCandidateDonationDs(
       basePath,
@@ -64,14 +78,19 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
       .flatMap(writePartyDonationDs(basePath, _))
   }
 
-  def readCandidateDonations(basePath: String)(implicit spark: SparkSession): IO[Dataset[CandidateDonation]] = {
+  private[api] def readCandidateDonations(
+    basePath: String
+  )(
+    implicit
+    spark: SparkSession
+  ): IO[Dataset[CandidateDonation]] = {
     import spark.implicits._
 
     logger.info(s"Reading the contribution aggregate data for the candidates from $basePath")
     readDataFrame(candidateDonationPathOf(basePath)).map(_.as[CandidateDonation])
   }
 
-  def readCandidateDonationsWithPredicate(
+  private[api] def readCandidateDonationsWithPredicate(
     basePath: String
   )(
     p: CandidateDonation => Boolean
@@ -81,14 +100,14 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
   ): IO[Dataset[CandidateDonation]] =
     readCandidateDonations(basePath).map(_.filter(p))
 
-  def readPartyDonations(basePath: String)(implicit spark: SparkSession): IO[Dataset[PartyDonation]] = {
+  private[api] def readPartyDonations(basePath: String)(implicit spark: SparkSession): IO[Dataset[PartyDonation]] = {
     import spark.implicits._
 
     logger.info(s"Reading the contribution aggregate data for the parties from $basePath")
     readDataFrame(partyDonationPathOf(basePath)).map(_.as[PartyDonation])
   }
 
-  def readPartyDonationsWithPredicate(
+  private[api] def readPartyDonationsWithPredicate(
     basePath: String
   )(
     p: PartyDonation => Boolean
@@ -98,7 +117,7 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
   ): IO[Dataset[PartyDonation]] =
     readPartyDonations(basePath).map(_.filter(p))
 
-  def writeCandidateDonationDs(
+  private[api] def writeCandidateDonationDs(
     basePath: String,
     donationDs: Dataset[CandidateDonation]
   )(
@@ -109,7 +128,7 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
     writeDataset(candidateDonationPathOf(basePath), donationDs)
   }
 
-  def writePartyDonationDs(
+  private[api] def writePartyDonationDs(
     basePath: String,
     donationDs: Dataset[PartyDonation]
   )(
@@ -186,26 +205,9 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
           logger.error(err)(
             s"An error caught while looking up contributions by name for the representative $representative")
           None
-        case Right(response) =>
-          CandidateDonation.ofOrNone(representative, response.data.aggregateTotals)
-//        .map(Right(_))
-//        .getOrElse(Left(new NoResultsException(representative.name)))
+        case Right(response) => CandidateDonation.ofOrNone(representative, response.data.aggregateTotals)
       }
       .unsafeRunSync()
-//    // Try searching contributions by candidate name first
-//    val response = MapLightClient.getContributionByCandidateName(representative.name)
-//
-////    MapLightClient.getContributionByCandidateName(representative.name)
-//
-//    // If the lookup fails, search candidate name to get MapLight id
-//    val donations =
-//      if (response.isEmpty)
-//        matchCandidate(representative, MapLightClient.searchCandidate(representative.name))
-//          .map(c => MapLightClient.getContribution(RequestParams(c)).data.aggregateTotals)
-//          .getOrElse(Seq.empty)
-//      else response.data.aggregateTotals
-//
-//    CandidateDonation.ofOrNone(representative, donations)
 
   private def searchCandidateContributions(
     representative: Representative
@@ -216,7 +218,6 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
       .flatMap {
         case Left(err) =>
           logger.error(err)(s"An error caught while searching the representative $representative")
-          //Either[Throwable, ContributionSearchResponse]
           IO.pure(Left(err))
         case Right(nameSearch) =>
           matchCandidate(representative, nameSearch) match {
@@ -234,18 +235,6 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
                     else Right(contributionSearch)
                 }
           }
-//            .map(RequestParams(_))
-
-//            .flatMap(p => MapLightClient.getContribution(p).attempt/*.map{
-//              case Left(err) => Left(err)
-//              case Right(contributionSearch) => Right(contributionSearch)
-//            }*/)
-//
-//            .map(MapLightClient.getContribution)
-//        .map(_.attempt.map{
-//          case Left(err) => Left(err)
-//          case Right(contributionSearch) => Right(contributionSearch)
-//        })
       }
 
   /** Tries to match the given representative in the given [[CandidateSearchResponse]] object.
@@ -317,23 +306,6 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
         .mode(SaveMode.Overwrite)
         .parquet(path)
     }
-
-//  override def runSpark(args: Array[String])(implicit spark: SparkSession): Unit = {
-//    val groupedArgs = args.grouped(2)
-//    var basePath: String = null
-//    var key: String = null
-//    while (groupedArgs.hasNext) {
-//      val arg = groupedArgs.next()
-//      arg(0) match {
-//        case "--base-path"      => basePath = arg(1)
-//        case "--google-api-key" => key = arg(1)
-//        case other              => throw new IllegalArgumentException(s"$other is invalid argument!")
-//      }
-//    }
-//    require(StringUtils.isNotBlank(basePath), "The base path must be specified!")
-//    require(StringUtils.isNotBlank(key), "The Google API key must be specified!")
-//    preload(key, basePath)
-//  }
 
   private def formatErrorMessage(representative: Representative, response: CandidateSearchResponse): String =
     s"Failed to match $representative with ${response.data.candidateNames}"

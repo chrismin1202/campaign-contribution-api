@@ -21,6 +21,7 @@ import com.chrism.api.config.SystemPropertiesHandle
 import com.chrism.api.log.Logging
 import com.chrism.api.model.ContributionsResponse
 import com.chrism.api.spark.TestSparkSessionLike
+import com.chrism.api.standard.{SubdivisionKind, UsSubdivision}
 import org.apache.commons.io.FileUtils
 import org.http4s.{Method, Request}
 import org.json4s.native.Serialization
@@ -33,6 +34,12 @@ final class CampaignContributionServiceTest
     with Logging {
 
   import com.chrism.api.google.CivicInformationClient.ApiKeyPropKey
+
+  test("parsing states system property") {
+    val states = UsSubdivision.Values.filter(_.kind == SubdivisionKind.State)
+    val raw = states.map(_.code).mkString(",")
+    CampaignContributionService.parseStates(s""""$raw"""") should contain theSameElementsAs states
+  }
 
   test("aggregating campaign contributions for all parties") {
     withSystemPropertiesIfSet(ApiKeyPropKey) { props =>
