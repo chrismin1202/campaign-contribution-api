@@ -134,12 +134,12 @@ Assuming that Linux users are savvy enough to install the required versions of J
   1. Run the application.
       ```sh
       java \
-        -cp /path-to-your-repo-dir/campaign-contribution-api/target/scala-2.12/campaign-contribution-api-assembly-0.0.1.jar \
+        -cp target/scala-2.12/campaign-contribution-api-assembly-0.0.1.jar \
           -Dapi.basePath="/any/arbitrary/empty/directory/that/exits" \
           -Dapi.google.apiKey="YOUR_GOOGLE_API_KEY_GOES_HERE" \
       com.chrism.api.CampaignContributionService
       ```
-      Replace `/path-to-your-repo-dir/campaign-contribution-api` with the actual path to your repository, `/any/arbitrary/empty/directory/that/exits` with the actual path you want to use for persisting data, e.g., `/tmp/campaign-contribution-test`, and `YOUR_GOOGLE_API_KEY_GOES_HERE` with the actual API key.<br />
+      If you are not running from the root directory of your repository, you need to replace `target/scala-2.12/campaign-contribution-api-assembly-0.0.1.jar` with the fully qualified path. `/any/arbitrary/empty/directory/that/exits` should be replaced with the actual path you want to use for persisting data, e.g., `/tmp/campaign-contribution-test`, and `YOUR_GOOGLE_API_KEY_GOES_HERE` with the actual API key.<br />
       Note that this implementation uses Java System Properties for setting configurations rather than command line arguments or environment variables. Note `-Dapi.basePath` and `-Dapi.google.apiKey`.<br />
       Also note that due to the number of API calls that need to be made, the application limits the number of states to a few. Refer to `CampaignContributionService.DefaultStates` for the states that are included in the aggregates. To override, you can pass in `-Dapi.states` to the command. To include all 50 states:
       ```sh
@@ -151,14 +151,35 @@ Assuming that Linux users are savvy enough to install the required versions of J
       ```
       State names are acceptable as well.
   1. Test the API.
+      Run the following `curl` command from another terminal
       ```sh
-      curl http://127.0.0.1:8080/contributions/all
+      curl http://127.0.0.1:8080/contributions/[PATH_GOES_HERE]
       ```
-      The base URL should be `http://127.0.0.1:8080`, but check When the application boots up. The actual host and port should be printed to the console. Note that the application can fail to boot up if the port `8080` is already bound. If the port `8080` _is_ actually bound, the port number needs to be changed by passing in another property:
+      or paste `http://127.0.0.1:8080/contributions/[PATH_GOES_HERE]` in your browser.<br />
+      The base URL should be `http://127.0.0.1:8080`, but check when the application boots up.
+      ```sh
+      20/04/21 19:59:41 INFO
+          _   _   _        _ _
+        | |_| |_| |_ _ __| | | ___
+        | ' \  _|  _| '_ \_  _(_-<
+        |_||_\__|\__| .__/ |_|/__/
+                    |_|
+      20/04/21 19:59:42 INFO http4s v0.21.3 on blaze v0.14.11 started at http://127.0.0.1:8080/
+      ```
+      The actual host and port should be printed to the console. Note that the application can fail to boot up if the port `8080` is already bound. If the port `8080` _is_ actually bound, the port number needs to be changed by passing in another property:
       ```sh
       -Dapi.port=8081
       ```
-      Replace `8081` with the actual port number that is not in use. The endpoint should return JSON that looks similar to this:
+      Replace `8081` with the actual port number that is not in use.<br />
+      Currently, there is only 1 endpoint: `contributions`. `[PATH_GOES_HERE]` should be replaced with one of the following values:
+        - `all`: returns the stats for all political parties
+        - `democrat`: returns the stats for Democratic Party<br />
+          Other acceptable variations include `D`, `Democrats`, `Democratic`, and `Democratic Party`.
+        - `republican`: returns the stats for Republican Party<br />
+          Other accetable variations include `R`, `Republicans`, and `Republican Party`.
+
+      Note that the values are case-insensitive.<br />
+      The endpoint should return JSON that looks similar to this depending on which party you choose:
       ```json
       {
         "donations": [
@@ -189,14 +210,7 @@ Assuming that Linux users are savvy enough to install the required versions of J
         ]
       }
       ```
-      except that the returned JSON is not beautified.<br />
-      Note that `all` is a parameter. If you are only interested in a single party, you can pass in `republican` or `democrat` instead:
-      ```sh
-      curl http://127.0.0.1:8080/contributions/republican
-      ```
-      ```sh
-      curl http://127.0.0.1:8080/contributions/democrat
-      ```
+      except that the returned JSON is not beautified.
 
 ### IDE (IntelliJ)
 

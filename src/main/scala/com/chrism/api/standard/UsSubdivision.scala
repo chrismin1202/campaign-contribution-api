@@ -43,7 +43,8 @@ object UsSubdivision {
   val UsDivisionId: String = "country:us"
   val UsOcdId: String = s"$OcdDivision/$UsDivisionId"
 
-  val Values: Set[UsSubdivision] = Set(
+  @transient
+  lazy val values: Set[UsSubdivision] = Set(
     AL,
     AK,
     AZ,
@@ -104,7 +105,7 @@ object UsSubdivision {
   )
 
   def parseOrNone(codeOrName: String): Option[UsSubdivision] =
-    Option(codeOrName).flatMap(n => Values.find(v => v.code.equalsIgnoreCase(n) || v.name.equalsIgnoreCase(n)))
+    Option(codeOrName).flatMap(n => values.find(v => v.code.equalsIgnoreCase(n) || v.name.equalsIgnoreCase(n)))
 
   def parse(codeOrName: String): UsSubdivision =
     parseOrNone(codeOrName)

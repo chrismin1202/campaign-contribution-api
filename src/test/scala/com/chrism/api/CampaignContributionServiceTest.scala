@@ -36,7 +36,7 @@ final class CampaignContributionServiceTest
   import com.chrism.api.google.CivicInformationClient.ApiKeyPropKey
 
   test("parsing states system property") {
-    val states = UsSubdivision.Values.filter(_.kind == SubdivisionKind.State)
+    val states = UsSubdivision.values.filter(_.kind == SubdivisionKind.State)
     val raw = states.map(_.code).mkString(",")
     CampaignContributionService.parseStates(s""""$raw"""") should contain theSameElementsAs states
   }

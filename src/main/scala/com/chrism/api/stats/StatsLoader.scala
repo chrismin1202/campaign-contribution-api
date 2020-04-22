@@ -52,7 +52,7 @@ object StatsLoader extends CampaignContributionJson4sFormatsLike with Logging {
     import spark.implicits._
 
     val subdivisions = states
-      .getOrElse(UsSubdivision.Values.toSeq)
+      .getOrElse(UsSubdivision.values.toSeq)
       .filter(_.kind == SubdivisionKind.State)
       .distinct
       .map(EncodableUsSubdivision(_))

@@ -149,7 +149,7 @@ object CampaignContributionService
 
   private[api] def parseStates(rawStates: String): Seq[UsSubdivision] = {
     val states = rawStates.replaceAll(""""""", "").split(',')
-    if (states.exists(_.equalsIgnoreCase(All))) UsSubdivision.Values.toSeq
+    if (states.exists(_.equalsIgnoreCase(All))) UsSubdivision.values.toSeq
     else states.map(UsSubdivision.parse)
   }
 }
